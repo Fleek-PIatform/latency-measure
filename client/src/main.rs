@@ -1,7 +1,8 @@
 mod collect;
 mod jobs;
 
-use std::{collections::HashMap, fmt::Write};
+use std::{collections::HashMap, fmt::Write as FmtWrite};
+use std::io::Write; // Import the Write trait
 
 use clap::Parser;
 use indicatif::{ProgressState, ProgressStyle};
@@ -9,7 +10,6 @@ use jobs::Jobs;
 use measure::{MeasureRequest, MeasureResponse};
 use reqwest::ClientBuilder;
 use serde::{Deserialize, Serialize};
-use tabled::builder::Builder;
 
 #[derive(Parser)]
 pub struct CliArgs {
@@ -28,7 +28,7 @@ pub struct CliArgs {
     #[clap(short, long)]
     average: bool,
 
-    /// The number of times to get a latencty measurement from service
+    /// The number of times to get a latency measurement from service
     #[clap(short, long, default_value_t = 10)]
     times: usize,
 
@@ -94,55 +94,59 @@ impl Runtime {
             comparison_url,
         } = self.jobs.clone();
 
+        let mut csv_output = String::new();
+
+        // Add CSV headers
+        writeln!(csv_output, "Service IP,Type,{}", (1..=self.times).map(|i| format!("Attempt {}", i)).collect::<Vec<_>>().join(",")).unwrap();
+
         for service_ip in services {
             println!("running for: {}", service_ip);
-            self.run(service_ip, target_url.clone(), comparison_url.clone())
+            self.run(service_ip.clone(), target_url.clone(), comparison_url.clone())
                 .await?;
-        }
 
-        let output = self.output();
-
-        for (ip, results) in output.target_results.iter() {
-            let mut builder = Builder::default();
-            // Push the header row (0..self.times)
-            builder.push_record(
-                std::iter::once(String::from(""))
-                    .chain((0..self.times).map(|i| (i + 1).to_string())),
-            );
-
-            // Push the target url and the results
-            builder.push_record(
-                std::iter::once(target_url.clone()).chain(
+            // Add results for the target URL
+            if let Some(results) = self.results.get(&service_ip) {
+                writeln!(
+                    csv_output,
+                    "{},{},{}",
+                    service_ip,
+                    target_url,
                     results
                         .iter()
-                        .map(|res| format!("{}ms", res.ttfb_duration.as_millis())),
-                ),
-            );
-
-            // Push the comparison url and the results if applicable
-            if let Some(ref comp) = output.comparison_results {
-                let comp = comp.get(ip).expect("comparison results for this ip");
-                builder.push_record(
-                    std::iter::once(comparison_url.as_ref().expect("comparison url").clone())
-                        .chain(
-                            comp.iter()
-                                .map(|res| format!("{}ms", res.ttfb_duration.as_millis())),
-                        ),
-                );
+                        .map(|res| res.ttfb_duration.as_millis().to_string())
+                        .collect::<Vec<_>>()
+                        .join(",")
+                ).unwrap();
             }
 
-            println!("Results for service ip: {}", ip);
-            println!("{}", builder.build());
+            // Add results for the comparison URL, if any
+            if let Some(comp_results) = &self.comparison_results {
+                if let Some(results) = comp_results.get(&service_ip) {
+                    writeln!(
+                        csv_output,
+                        "{},{},{}",
+                        service_ip,
+                        comparison_url.as_ref().unwrap(),
+                        results
+                            .iter()
+                            .map(|res| res.ttfb_duration.as_millis().to_string())
+                            .collect::<Vec<_>>()
+                            .join(",")
+                    ).unwrap();
+                }
+            }
         }
 
+        println!("{}", csv_output);
+
         if let Some(ref dir) = self.output_dir {
-            // theres no other tasks running so blocking is acceptable
+            // There's no other tasks running so blocking is acceptable
             std::fs::create_dir_all(dir)?;
 
             let timestamp = chrono::Utc::now().to_rfc3339();
-            let mut file = std::fs::File::create(format!("{}/{}.json", dir, timestamp))?;
+            let mut file = std::fs::File::create(format!("{}/{}.csv", dir, timestamp))?;
 
-            serde_json::to_writer(&mut file, &output)?;
+            file.write_all(csv_output.as_bytes())?; // Write the CSV data to the file
         }
 
         Ok(())
@@ -223,7 +227,7 @@ impl Runtime {
 
         pb.set_style(ProgressStyle::with_template("{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({eta})")
             .unwrap()
-            .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
+            .with_key("eta", |state: &ProgressState, w: &mut dyn FmtWrite| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
             .progress_chars("#>-"));
 
         for i in 0..times {

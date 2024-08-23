@@ -61,7 +61,7 @@ pub fn try_get_deployed_url() -> anyhow::Result<String> {
         fs::read_to_string(CID).context("error trying to read ts/CID.txt file from deployment, either pass in a target_url or a complete the deploymnet process")?;
 
     Ok(format!(
-        "https://fleek-test.network/services/1/ipfs/{}",
+        "https://fleek-internal.com/ipfs/{}",
         cid
     ))
 }
