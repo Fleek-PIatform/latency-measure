@@ -4,6 +4,7 @@
   "main": "index.js",
   "license": "MIT",
   "dependencies": {
+    "@fleek-platform/sdk": "^2.1.5",
     "@fleekxyz/sdk": "^0.7.3",
     "@types/node": "^20.11.17",
     "aws-cdk-lib": "2.101.1",

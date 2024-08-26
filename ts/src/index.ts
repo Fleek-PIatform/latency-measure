@@ -21,8 +21,6 @@ const deployFleekFunction = async () => {
     await fs.writeFile("CID.txt", new TextEncoder().encode(result.cid), { flag: "w"});
 }
 
-deployFleekFunction();
-
 const app = new cdk.App();
 
 const regions = [

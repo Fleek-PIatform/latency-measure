@@ -95,7 +95,7 @@ export class AwsStackV2 extends cdk.Stack {
       "export PATH=\"/root/.cargo/bin:$PATH\"",
       "rustup install stable",
       // install service
-      "git clone https://github.com/fleek-network/latency-measure",
+      "git clone https://github.com/fleek-platform/latency-measure",
       "cd latency-measure/service && cargo install --path .",
       "cd ../ && cp measure.service.template /etc/systemd/system/measure.service",
       "sed -i 's|REPLACE_WITH_PATH_TO_BIN|/root/.cargo/bin/measure|g' /etc/systemd/system/measure.service",
